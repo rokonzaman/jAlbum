@@ -3,29 +3,24 @@ package com.jalbum;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.net.http.SslError;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.view.*;
-import android.webkit.*;
+import android.webkit.CookieManager;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.TextView;
+import android.widget.FrameLayout;
 import org.apache.commons.lang3.StringUtils;
 
 public class MainActivity extends AppCompatActivity
 {
     static final String DEFAULT_URL = "https://shentar.github.io/2018/02/11/jalbum/";
     private JalbumWebView webView = null;
-    private String cookies = null;
     private SharedPreferences preferences = null;
     private Settings settings = null;
 
-    private static int dip2px(Context context, float dpValue)
-    {
-        float scale = context.getResources().getDisplayMetrics().density;
-        return (int) (dpValue * scale + 0.5f);
-    }
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -40,6 +35,7 @@ public class MainActivity extends AppCompatActivity
 
         webView = findViewById(R.id.web_content);
         CookieManager.getInstance().setAcceptCookie(true);
+
         WebSettings webSettings = webView.getSettings();
         webSettings.setSupportZoom(true);
         webSettings.setJavaScriptEnabled(true);
@@ -50,71 +46,11 @@ public class MainActivity extends AppCompatActivity
         webSettings.setLoadWithOverviewMode(true);
         webSettings.setUserAgentString("jAlbum_android_apk_client");
 
-        webView.setWebViewClient(new WebViewClient()
-        {
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url)
-            {
-                view.loadUrl(url);
-                return super.shouldOverrideUrlLoading(view, url);
-            }
-
-            public void onPageFinished(WebView view, String url)
-            {
-                CookieManager cookieManager = CookieManager.getInstance();
-                cookies = cookieManager.getCookie(url);
-                super.onPageFinished(view, url);
-            }
-
-            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error)
-            {
-                handler.proceed();
-            }
-        });
-
-        webView.setOnLongClickListener(new View.OnLongClickListener()
-        {
-            @Override
-            public boolean onLongClick(View v)
-            {
-                if (!(v instanceof WebView))
-                {
-                    return true;
-                }
-
-                WebView.HitTestResult result = ((WebView) v).getHitTestResult();
-                int type = result.getType();
-                if (WebView.HitTestResult.IMAGE_TYPE != type)
-                {
-                    return true;
-                }
-
-                final String imgurl = result.getExtra();
-                final PopWindow itemLongClickedPopWindow =
-                    new PopWindow(MainActivity.this, PopWindow.IMAGE_VIEW_POPUPWINDOW,
-                                  dip2px(MainActivity.this, 120), dip2px(MainActivity.this, 40));
-                itemLongClickedPopWindow
-                    .showAtLocation(v, Gravity.START | Gravity.TOP, (int) webView.getDownX(),
-                                    (int) webView.getDownY());
-                itemLongClickedPopWindow.getView(R.id.item_longclicked_saveImage)
-                    .setOnClickListener(new View.OnClickListener()
-                    {
-                        @Override
-                        public void onClick(View v)
-                        {
-                            if (!(v instanceof TextView))
-                            {
-                                return;
-                            }
-
-                            itemLongClickedPopWindow.dismiss();
-                            new SaveImage(MainActivity.this, imgurl, cookies).execute();
-                        }
-                    });
-
-                return true;
-            }
-        });
+        webView.setWebViewClient(new NoHttpsWebViewClient());
+        webView.setWebChromeClient(
+            new JalbumWebChromeClient((FrameLayout) findViewById(R.id.jalbum_view_frame), this,
+                                      webView));
+        webView.setOnLongClickListener(new JAlbumLongClickListener(webView, this));
 
         initSettings();
     }
@@ -269,6 +205,10 @@ public class MainActivity extends AppCompatActivity
         webView.pauseTimers();
         webView.stopLoading();
         webView.loadUrl(preferences.getString("url", "http://photo.codefine.site:2148"));
+        CookieManager.getInstance().setCookie(webView.getUrl(),
+                                              "SESSION_F0DDC87C51644F4D8AEA0C29893FCC53="
+                                                  + "SVe1c53SZqo2uo1xCZurZQeCPx6LsYX7ezEZdBgex82E5W8EEHahYFYatPllx7hZ;Domain=photo.codefine.site");
+        CookieManager.getInstance().flush();
         webView.resumeTimers();
         webView.onResume();
     }
